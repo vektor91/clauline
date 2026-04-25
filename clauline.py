@@ -84,7 +84,7 @@ def model_segment(model_obj, effort):
     return parts
 
 def ctx_bar_segment(ctx):
-    used_pct = ctx.get("used_percentage", 0)
+    used_pct = ctx.get("used_percentage") or 0
     filled = min(10, (int(used_pct * 10 + 50)) // 100)
     shimmer_pos = int(time.time()) % 13
     blocks = []
@@ -201,10 +201,10 @@ def rate_limits_segment(rl):
     five  = (rl or {}).get("five_hour", {})
     seven = (rl or {}).get("seven_day", {})
 
-    fp  = five.get("used_percentage", 0)
-    fts = five.get("resets_at", 0)
-    sp  = seven.get("used_percentage", 0)
-    sts = seven.get("resets_at", 0)
+    fp  = five.get("used_percentage") or 0
+    fts = five.get("resets_at") or 0
+    sp  = seven.get("used_percentage") or 0
+    sts = seven.get("resets_at") or 0
 
     fc = pct_color(fp)
     sc = pct_color(sp)
@@ -213,7 +213,7 @@ def rate_limits_segment(rl):
 
     five_str  = f"{fc}{int(fp)}%{RESET} (↺{fr})"
     seven_str = f"{sc}{int(sp)}%{RESET} (↺{sr})"
-    return f"5h:{five_str} · 7d:{seven_str}"
+    return f"quota  5h:{five_str} · 7d:{seven_str}"
 
 SEP = f" {rgb(80,80,100)}│{RESET} "
 
@@ -221,6 +221,8 @@ def main():
     try:
         raw = sys.stdin.read()
         data = json.loads(raw) if raw.strip() else {}
+        if not isinstance(data, dict):
+            data = {}
 
         model_obj  = data.get("model", {})
         out_cfg    = data.get("output_config", {})
