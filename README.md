@@ -1,29 +1,47 @@
 # clauline
 
 Python3 statusline for Claude Code. Displays session stats — git status, model,
-context usage, cost, duration, and rate limits — in a compact terminal bar.
-No dependencies beyond the Python 3.8+ standard library.
+context usage, cache efficiency, cost, duration, compaction warnings, and rate
+limits — in a compact terminal bar. No dependencies beyond Python 3.8+ stdlib.
 
 ## Preview
 
 ```
-● myapp │ ⎇  main✓ │ Opus 4.7 ↑ │ ████████░░ 78% │ tok:45.2k │ cost:$1.23 │ dur:34m │ 5h:45% (↺1h 30m) · 7d:12% (↺2d)
+● myapp │ ⎇  main✓ │ Sonnet 4.6 ↑ │ ████████░░ 78% /200k ⚠ │ cache:71% │ tok:45.2k │ cost:$1.23 │ dur:34m @14:30 │ compact:1x ⟳ │ quota  5h:45% (↺1h 30m) · 7d:12% (↺2d)
 ```
 
-The bar is fully colorized in the terminal. Colors shift green→yellow→red on the
-context bar and rate-limit percentages. The dot pulses every second.
+The bar is fully colorized. Colors shift green→yellow→red on context, cache, and
+quota. The dot pulses every second.
 
 **Fields:**
 
-1. Live pulsing dot
-2. Current folder name
-3. Git branch + clean (`✓`) / dirty (`✗`) indicator
-4. Active model + effort level (`↑` high / `→` medium / `↓` low)
-5. Context window usage bar (animated gradient, 10 blocks)
-6. Total token count (input + output)
-7. Session cost (actual if available, estimated otherwise)
-8. Session duration
-9. Rate limits — 5h window and 7-day window with reset countdown
+| Segment | Description |
+|---------|-------------|
+| `●` | Live pulsing dot |
+| folder | Current folder name |
+| `⎇  branch✓/✗` | Git branch + clean/dirty |
+| model + `↑↓→` | Active model + effort level |
+| `think:` | Extended thinking budget (when active) |
+| context bar | Usage bar, percentage, max tokens, `⚠` at >80% |
+| `cache:XX%` | Cache hit rate — higher = fewer tokens billed at full price |
+| `tok:` | Total tokens this session |
+| `cost:` | Session cost (actual if available, estimated otherwise) |
+| `dur:Xm @HH:MM` | Duration + session start time |
+| `compact:Nx ⟳` | Context compaction count (quality risk indicator) |
+| `tools:N` | Tool calls this session |
+| `quota` | Rate limits — 5h and 7-day windows with reset countdown |
+
+## Token efficiency signals
+
+Three signals tell you when to act for fewer tokens and better quality:
+
+- **`cache:XX%`** — how much of your input came from cache (cheap). Below 30%:
+  context isn't being reused well, consider restructuring or using `/compact`.
+- **`compact:Nx ⟳`** — how many times context was auto-compacted. Each
+  compaction loses information and degrades recall. If you see `2x`, start a
+  fresh session.
+- **`⚠` on the context bar** — fires at >80% usage. Quality degrades here as
+  the model struggles to attend to the full context. Reset now, not after.
 
 ## Requirements
 
@@ -41,8 +59,6 @@ curl -fsSL https://raw.githubusercontent.com/vektor91/clauline/main/install.sh |
 
 **Option B — via Claude Code prompt:**
 
-Open Claude Code and run:
-
 ```
 Install clauline from https://github.com/vektor91/clauline — clone the repo, run install.sh, and confirm the statusline is active.
 ```
@@ -54,6 +70,83 @@ git clone https://github.com/vektor91/clauline
 cd clauline
 bash install.sh
 ```
+
+## Update
+
+```bash
+python3 ~/.claude/clauline.py --update
+```
+
+Downloads the latest version, backs up the current one.
+
+## Uninstall
+
+```bash
+bash install.sh --uninstall
+```
+
+Removes `~/.claude/clauline.py`, cleans `statusLine` from `settings.json`.
+
+## Configuration
+
+Create `~/.claude/clauline.json` to override defaults. All keys are optional:
+
+```json
+{
+  "segments": {
+    "dot":         true,
+    "folder":      true,
+    "git":         true,
+    "model":       true,
+    "thinking":    true,
+    "context_bar": true,
+    "cache":       true,
+    "tokens":      true,
+    "cost":        false,
+    "duration":    true,
+    "compaction":  true,
+    "tools":       true,
+    "rate_limits": true
+  },
+  "pricing": {
+    "opus":   [15.0, 75.0],
+    "sonnet": [3.0, 15.0],
+    "haiku":  [0.80, 4.0]
+  },
+  "warn_ctx_pct": 80,
+  "max_width": 0
+}
+```
+
+`max_width: 0` means auto-detect terminal width. If the bar is too wide, lower-
+priority segments are dropped from the right.
+
+### Per-project config
+
+Place a `.clauline` file (same JSON format) in any project root. It overrides
+the user config for that project only:
+
+```json
+{
+  "segments": {
+    "cost": false,
+    "rate_limits": false
+  }
+}
+```
+
+## Session cost estimation
+
+If Claude Code exposes `cost.total_cost_usd` in the statusLine payload, that
+value is used directly. Otherwise cost is estimated from token counts using
+Claude pricing with cache-aware calculation:
+
+- Cache reads billed at ~10% of input price
+- Cache writes billed at ~125% of input price
+- Remaining tokens at full input price
+
+Current defaults — Opus 4.7: $15/$75 per MTok in/out, Sonnet 4.6: $3/$15,
+Haiku 4.5: $0.80/$4. Override in config if pricing changes.
 
 ## Manual setup
 
@@ -74,13 +167,6 @@ Add to `~/.claude/settings.json`:
 ```
 
 Restart Claude Code to apply.
-
-## Session cost estimation
-
-If Claude Code exposes `cost.total_cost_usd` in the statusLine payload, that
-value is used directly. Otherwise, cost is estimated from token counts using
-known Claude pricing — Opus 4.7: $15/$75 per MTok in/out, Sonnet 4.6: $3/$15,
-Haiku 4.5: $0.80/$4.
 
 ## License
 
